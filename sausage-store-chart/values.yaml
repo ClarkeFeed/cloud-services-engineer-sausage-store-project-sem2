@@ -55,14 +55,22 @@ backend:
       memory: "512Mi"
       cpu: "25m"
   containerPort: 8080
+  readinessProbe:
+    httpGet:
+      path: /actuator/health
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
   livenessProbe:
     httpGet:
       path: /actuator/health
       port: 8080
-    initialDelaySeconds: 15
-    periodSeconds: 30
-    timeoutSeconds: 1
-    failureThreshold: 6
+    initialDelaySeconds: 60
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
   vpa:
     updatePolicy:
       updateMode: "Recreate"
