@@ -84,7 +84,11 @@ jobs:
           run: |
             helm plugin install https://github.com/chartmuseum/helm-push
             helm repo add chartmuseum ${{ secrets.NEXUS_HELM_REPO }} --username ${{ secrets.NEXUS_HELM_REPO_USER }} --password ${{ secrets.NEXUS_HELM_REPO_PASSWORD }}
-            helm cm-push sausage-store-chart --version=${{ github.sha }} chartmuseum
+            export CURRENT_VER=`helm show chart ./sausage-store-chart | yq '.version'`
+            export NEW_VER=`echo "$CURRENT_VER" | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g'`
+            yq e -i '.version = env(NEW_VER)' sausage-store-chart/Chart.yaml
+            cd sausage-store-chart
+            helm cm-push --version=$NEW_VER --context-path="/repository/kirillpudov-sem2-helm" . chartmuseum
 
   # Деплоим приложения в кластер Kubernetes с помощью helm-чарт
   deploy_helm_chart_to_kubernetes:
@@ -102,16 +106,21 @@ jobs:
           run: |
             helm repo add chartmuseum ${{ secrets.NEXUS_HELM_REPO }} --username ${{ secrets.NEXUS_HELM_REPO_USER }} --password ${{ secrets.NEXUS_HELM_REPO_PASSWORD }}
         
-        - name: 'Deploy'
-          uses: 'deliverybot/helm@v1'
-          with:
-            release: 'sausage-store-chart'
-            namespace: $SAUSAGE_STORE_NAMESPACE
-            chart: 'sausage-store-chart'
-            version: '${{ github.sha }}'
-            token: '${{ github.token }}'
-            values: |
-              global.vault.name=${{ secrets.VAULT_HOST }}
-              global.vault.token=${{ secrets.VAULT_TOKEN }}
-          env:
-            KUBECONFIG_FILE: '${{ secrets.KUBECONFIG }}'
+        - name: Deploy to Kubernetes
+          run: |
+            echo "${{ secrets.KUBE_CONFIG }}" > kubeconfig.yaml
+            export KUBECONFIG=kubeconfig.yaml
+            chmod 600 kubeconfig.yaml
+            kubectl config get-contexts
+            helm repo update
+            echo "Listing available charts in repository..."
+            helm search repo chartmuseum
+            helm upgrade --install sausage-store chartmuseum/sausage-store \
+              --namespace ${{ secrets.SAUSAGE_STORE_NAMESPACE }} \
+              --set frontend.fqdn=front-${{ secrets.STUDENT_NAME }}.2sem.students-projects.ru \
+              --set frontend.image.repository=${{ env.DOCKER_USERNAME }}/sausage-store/sausage-frontend \
+              --set frontend.image.tag=latest \
+              --set backend.image.repository=${{ env.DOCKER_USERNAME }}/sausage-store/sausage-backend \
+              --set backend.image.tag=latest \
+              --set backend-report.image.repository=${{ env.DOCKER_USERNAME }}/sausage-store/sausage-backend-report \
+              --set backend-report.image.tag=latest 
