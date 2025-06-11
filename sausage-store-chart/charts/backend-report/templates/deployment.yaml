@@ -27,13 +27,13 @@ spec:
     spec:
       containers:
         - name: {{ .Chart.Name }}
-          image: {{ .Values.image }}
+          image: clarkefeed/sausage-backend-report:{{ .Values.image_tag }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           env:
             - name: PORT
               valueFrom:
                 configMapKeyRef:
-                  name: {{ .Release.Name }}-{{ .Chart.Name }}-config
+                  name: {{ .Release.Name }}-{{ .Chart.Name }}-conf
                   key: PORT
             - name: DB
               valueFrom:
@@ -48,9 +48,42 @@ spec:
           livenessProbe:
 {{ toYaml .Values.livenessProbe | indent 12 }} 
       volumes:
-      - name: {{ .Release.Name }}-{{ .Chart.Name }}-config
+      - name: {{ .Release.Name }}-{{ .Chart.Name }}-conf
         configMap:
-          name: {{ .Release.Name }}-{{ .Chart.Name }}-config
+          name: {{ .Release.Name }}-{{ .Chart.Name }}-conf
           items:
             - key: PORT
               path: PORT
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Release.Name }}-{{ .Chart.Name }}-secret
+data:
+  env: bW9uZ29kYjovL3JlcG9ydHM6cmVwb3J0c3Bhc3N3b3JkQG1vbmdvZGI6MjcwMTcvc2F1c2FnZS1zdG9yZT9hdXRoU291cmNlPWFkbWlu
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-{{ .Chart.Name }}-conf
+data:
+  PORT: "8080"
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ .Release.Name }}-{{ .Chart.Name }}-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ .Release.Name }}-{{ .Chart.Name }}
+  minReplicas: {{ .Values.hpa.minReplicas }}
+  maxReplicas: {{ .Values.hpa.maxReplicas }}
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: {{ .Values.hpa.averageUtilization }}

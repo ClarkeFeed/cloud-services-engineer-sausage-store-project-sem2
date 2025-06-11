@@ -1,13 +1,12 @@
 global:
   imagePullPolicy: Always
-  ###vault:
-  ###  host: ip
-  ###  name: vault
-  ###  vaultToken: someToken
+  vault:
+   host: ip
+   name: vault
+   vaultToken: someToken
 
 
 frontend:
-### В чарте frontend отсутствуют некоторые важные файлы. Поймите какие и опишите их.
   replicas: 1
   revisionHistoryLimit: 15
   strategy:
@@ -15,11 +14,11 @@ frontend:
   service:
     port: 80
   ingress:
-    host: YOUR_STUDENT_HOSTNAME.students-projects.ru # Корректный домен будет указан в задании
+    host: clarkefeed.students-projects.ru
     path: /
     pathType: Prefix
   containerPort: 80
-  image: clarkefeed/sausage-frontend:latest
+  image_tag: latest
   resources:
     requests:
       memory: "128Mi"
@@ -46,32 +45,40 @@ backend:
     rollingUpdate:
       maxUnavailable: 1
       maxSurge: 2
-  image: clarkefeed/sausage-backend:latest
+  image_tag: latest
   imagePullPolicy: Always
   resources:
     requests:
       memory: "256Mi"
-      cpu: "100m"
+      cpu: "25m"
     limits:
       memory: "512Mi"
-      cpu: "1"
+      cpu: "25m"
   containerPort: 8080
   livenessProbe:
-    exec:
-      command:
-        - ls
+    httpGet:
+      path: /actuator/health
+      port: 8080
     initialDelaySeconds: 15
-    periodSeconds: 10
+    periodSeconds: 30
+    timeoutSeconds: 1
+    failureThreshold: 6
   vpa:
     updatePolicy:
-      updateMode: "Auto"
+      updateMode: "Recreate"
     resourcePolicy:
       containerPolicies:
-      - containerName: "*"
-        controlledResources: ["cpu", "memory"]
+        - containerName: "*"
+          minAllowed:
+            cpu: 25m
+            memory: 0Mi
+          maxAllowed:
+            cpu: 25m
+            memory: 500Mi
+          controlledResources: ["cpu", "memory"]
 
 backend-report:
-  image: clarkefeed/sausage-backend-report:latest
+  image_tag: latest
   revisionHistoryLimit: 15
   replicas: 1
   containerPort: 8080
@@ -94,7 +101,7 @@ backend-report:
     periodSeconds: 10
   hpa:
     minReplicas: 1
-    maxReplicas: 1
+    maxReplicas: 5
     averageUtilization: 75
 
 infra:
@@ -106,7 +113,7 @@ infra:
     containerPort: 5432
   mongodb:
     env:
-      MMONGO_INITDB_ROOT_USERNAME: reports
+      MONGO_INITDB_ROOT_USERNAME: reports
       MONGO_INITDB_ROOT_PASSWORD: reportspassword
       MONGO_INITDB_DATABASE: sausage-store
     containerPort: 27017
